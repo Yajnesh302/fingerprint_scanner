@@ -1,0 +1,6 @@
+E:\fingerprint_scanner\MantraAttendance\MantraAttendance\bin\MantraAttendance.dll
+E:\fingerprint_scanner\MantraAttendance\MantraAttendance\bin\MantraAttendance.pdb
+E:\fingerprint_scanner\MantraAttendance\MantraAttendance\obj\Debug\MantraAttendance.csproj.AssemblyReference.cache
+E:\fingerprint_scanner\MantraAttendance\MantraAttendance\obj\Debug\MantraAttendance.csproj.CoreCompileInputs.cache
+E:\fingerprint_scanner\MantraAttendance\MantraAttendance\obj\Debug\MantraAttendance.dll
+E:\fingerprint_scanner\MantraAttendance\MantraAttendance\obj\Debug\MantraAttendance.pdb
