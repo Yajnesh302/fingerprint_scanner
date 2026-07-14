@@ -428,7 +428,8 @@ namespace MantraAttendance
         {
             if (_deviceType == null) return default(T);
 
-            if (!_methodCache.TryGetValue(methodName, out var method))
+            System.Reflection.MethodInfo method;
+            if (!_methodCache.TryGetValue(methodName, out method))
             {
                 method = _deviceType.GetMethod(methodName);
                 _methodCache[methodName] = method;
@@ -450,7 +451,8 @@ namespace MantraAttendance
         public object GetRefArg(string methodName, int parameterIndex)
         {
             string key = methodName + "_" + parameterIndex;
-            if (_refArgCache.TryGetValue(key, out var args)
+            object[] args;
+            if (_refArgCache.TryGetValue(key, out args)
                 && args != null && args.Length > parameterIndex)
             {
                 return args[parameterIndex];
