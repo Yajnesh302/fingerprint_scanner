@@ -41,6 +41,10 @@
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Change to x64 for 64-bit IIS; keep x86 for VS2015 IIS Express (32-bit) -->
+    <Mfs100Bitness Condition="'$(Mfs100Bitness)'==''">x86</Mfs100Bitness>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Data" />
@@ -84,6 +88,11 @@
   </PropertyGroup>
   <Import Project="$(VSToolsPath)\WebProjects\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != '' And Exists('$(VSToolsPath)\WebProjects\Microsoft.WebApplication.targets')" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="CopyMfs100Dlls" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)Lib\MANTRA.MFS100.dll" DestinationFolder="$(ProjectDir)bin\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)Lib\native\$(Mfs100Bitness)\MFS100Dll.dll" DestinationFolder="$(ProjectDir)bin\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)Lib\native\$(Mfs100Bitness)\iengine_ansi_iso.dll" DestinationFolder="$(ProjectDir)bin\" SkipUnchangedFiles="true" />
+  </Target>
   <ProjectExtensions>
     <VisualStudio>
       <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Web;
 using System.Web.Script.Serialization;
 using System.Web.UI;
 using System.Web.UI.WebControls;
@@ -55,15 +54,15 @@ namespace MantraAttendance
             else if (ret == -999)
             {
                 lblDeviceStatus.CssClass = "status";
-                lblDeviceStatus.Text = "MFS100 SDK dll not found in bin or installed paths. Click Re-init after placing MANTRA.MFS100.dll in bin.";
-                if (!string.IsNullOrEmpty(dev.LastError))
-                    lblDeviceStatus.Text += " [" + dev.LastError + "]";
+                lblDeviceStatus.Text = "MFS100 SDK not found. Use Demo Mode to test.";
             }
             else
             {
                 lblDeviceStatus.CssClass = "status error";
-                lblDeviceStatus.Text = "Scanner init failed (code " + ret + "). " +
-                    (string.IsNullOrEmpty(dev.LastError) ? "Check USB connection." : dev.LastError);
+                string detail = dev.LastInitError;
+                lblDeviceStatus.Text = "Scanner init failed (code " + ret + ")"
+                    + (string.IsNullOrEmpty(detail) ? "" : ": " + detail)
+                    + ". Check USB or use Demo Mode.";
             }
         }
 
@@ -300,10 +299,8 @@ namespace MantraAttendance
         private string FindExistingTemplate(string name)
         {
             var index = LoadIndex();
-            TemplateEntry entry = null;
-            if (index != null)
-                entry = index.FirstOrDefault(e =>
-                    e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            var entry = index?.FirstOrDefault(e =>
+                e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (entry != null)
             {
                 string path = Path.Combine(TemplatesDir, entry.File);
@@ -378,14 +375,13 @@ namespace MantraAttendance
     {
         private static readonly Lazy<DeviceManager> _instance =
             new Lazy<DeviceManager>(() => new DeviceManager());
-        public static DeviceManager Instance { get { return _instance.Value; } }
+        public static DeviceManager Instance => _instance.Value;
 
         public dynamic Device { get; private set; }
         public bool IsInitialized { get; private set; }
-        public string LastError { get; private set; }
+        public string LastInitError { get; private set; }
 
         private Type _deviceType;
-        private System.Reflection.Assembly _sdkAssembly;
         private readonly Dictionary<string, System.Reflection.MethodInfo> _methodCache =
             new Dictionary<string, System.Reflection.MethodInfo>();
         private readonly Dictionary<string, object[]> _refArgCache =
@@ -395,85 +391,47 @@ namespace MantraAttendance
 
         public int InitDevice()
         {
-            LastError = null;
             try
             {
                 if (Device == null)
                 {
-                    _deviceType = ResolveMfs100Type();
+                    _deviceType = Type.GetType("MANTRA.MFS100, MANTRA.MFS100", false)
+                        ?? Type.GetType("MANTRA.MFS100, MANTRA.MFS100.Net", false)
+                        ?? Type.GetType("MFS100, MFS100.Net", false)
+                        ?? Type.GetType("Mantra.MFS100.MFS100, Mantra.MFS100", false)
+                        ?? Type.GetTypeFromProgID("MFS100.MFS100", false);
+
                     if (_deviceType == null)
                     {
-                        LastError = "Could not find MANTRA.MFS100 type. Ensure the SDK DLL is in the bin folder.";
-                        return -999;
+                        var asm = AppDomain.CurrentDomain.GetAssemblies()
+                            .FirstOrDefault(a => a.GetName().Name.IndexOf("MFS100",
+                                StringComparison.OrdinalIgnoreCase) >= 0);
+                        if (asm != null)
+                            _deviceType = asm.GetTypes()
+                                .FirstOrDefault(t => t.Name == "MFS100");
                     }
+
+                    if (_deviceType == null)
+                        return -999;
 
                     Device = Activator.CreateInstance(_deviceType);
                 }
 
                 int ret = Device.Init();
                 IsInitialized = ret == 0;
-                if (!IsInitialized)
-                    LastError = "Init() returned code " + ret + ". Device may not be connected or driver not installed.";
+                if (ret != 0) LastInitError = "SDK Init() returned " + ret;
                 return ret;
             }
             catch (Exception ex)
             {
                 IsInitialized = false;
-                LastError = ex.GetType().Name + ": " + ex.Message;
-                if (ex.InnerException != null)
-                    LastError += " | Inner: " + ex.InnerException.Message;
+                // Unwrap to the real root cause (reflection/COM calls often wrap
+                // the actual error inside a TargetInvocationException).
+                Exception root = ex;
+                while (root.InnerException != null) root = root.InnerException;
+                LastInitError = root.GetType().Name + ": " + root.Message;
                 return -1;
             }
-        }
-
-        private Type ResolveMfs100Type()
-        {
-            Type t = Type.GetType("MANTRA.MFS100, MANTRA.MFS100", false)
-                ?? Type.GetType("MANTRA.MFS100, MANTRA.MFS100.Net", false)
-                ?? Type.GetType("MANTRA.MFS100, MANTRA.MFS100, Version=9.0.2.5, Culture=neutral, PublicKeyToken=fedab34666068406", false)
-                ?? Type.GetType("MFS100, MFS100.Net", false)
-                ?? Type.GetType("Mantra.MFS100.MFS100, Mantra.MFS100", false)
-                ?? Type.GetTypeFromProgID("MFS100.MFS100", false);
-            if (t != null) return t;
-
-            var asm = AppDomain.CurrentDomain.GetAssemblies()
-                .FirstOrDefault(a => a.GetName().Name.IndexOf("MFS100",
-                    StringComparison.OrdinalIgnoreCase) >= 0);
-            if (asm != null)
-            {
-                _sdkAssembly = asm;
-                return asm.GetTypes().FirstOrDefault(x => x.Name == "MFS100");
-            }
-
-            string binDir = HttpRuntime.BinDirectory;
-            string appRoot = AppDomain.CurrentDomain.BaseDirectory;
-            string[] searchPaths = new string[]
-            {
-                Path.Combine(binDir, "MANTRA.MFS100.dll"),
-                Path.Combine(binDir, "MFS100.Net.dll"),
-                Path.Combine(binDir, "MANTRA.MFS100.Net.dll"),
-                Path.Combine(appRoot, "Lib", "MANTRA.MFS100.dll"),
-                @"C:\Program Files\Mantra\MFS100 SDK\SDK\Dotnet\MANTRA.MFS100.dll",
-                @"C:\Program Files (x86)\Mantra\MFS100 SDK\SDK\Dotnet\MANTRA.MFS100.dll",
-                @"C:\Program Files\Mantra\MFS100 SDK\SDK\Dot Net\MANTRA.MFS100.dll",
-                @"C:\Program Files (x86)\Mantra\MFS100 SDK\SDK\Dot Net\MANTRA.MFS100.dll",
-            };
-
-            foreach (string path in searchPaths)
-            {
-                if (!File.Exists(path)) continue;
-                try
-                {
-                    _sdkAssembly = System.Reflection.Assembly.LoadFrom(path);
-                    t = _sdkAssembly.GetType("MANTRA.MFS100");
-                    if (t == null)
-                        t = _sdkAssembly.GetTypes().FirstOrDefault(x => x.Name == "MFS100");
-                    if (t != null) return t;
-                }
-                catch { }
-            }
-
-            return null;
         }
 
         public T InvokeMethod<T>(string methodName, object[] parameters, int[] refParamIndices)
